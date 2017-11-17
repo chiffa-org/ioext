@@ -64,3 +64,28 @@ func CompositeReadWriteSeeker(r io.Reader, w io.Writer, s io.Seeker) io.ReadWrit
 		io.Seeker
 	}{Reader: r, Writer: w, Seeker: s}
 }
+
+type multiCloser struct {
+	closers []io.Closer
+}
+
+func (t *multiCloser) Close() error {
+	for i, c := range t.closers {
+		if err := c.Close(); err != nil {
+			// Close remaining ignoring errors
+			for _, c := range t.closers[i+1:] {
+				c.Close()
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// MultiCloser creates a closer that closes all the
+// provided closers returning first error.
+func MultiCloser(closers ...io.Closer) io.Closer {
+	c := make([]io.Closer, len(closers))
+	copy(c, closers)
+	return &multiCloser{c}
+}
